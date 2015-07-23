@@ -33,6 +33,13 @@
           top: 10px !important;
           position: absolute;
         }
+
+        #qmlRunGitLink {
+          right: 5px;
+          bottom: 2px;
+          font-size: 14px;
+          position: absolute;
+        }
         </style>
     
         <script type="text/javascript" src="qmlweb/src/parser.js"></script>
@@ -48,11 +55,9 @@
 
     <div id="qmlSpace">Place for Qml scene</div>
     <div id="qmlSrcLink"><a target="_blank" href="">open source</a></div>
-<!--    
-    <div id="qmlRunLink"><a target="_blank" href="http://pavelvasev.github.io/qmlweb.run/">qmlweb.run</a></div>    
--->    
     <div id="qmlRunLink"><a target="_blank" href="javascript:window.location.href = window.location.href.split('?')[0];">qmlweb.run</a></div>    
-
+    
+    <div id="qmlRunGitLink"><a target="_blank" href="https://github.com/pavelvasev/qmlweb.run">qmlweb.run own repo</a></div>        
 
 <script>
     function getParameterByName(name,separator) {
@@ -74,8 +79,13 @@
 
     var src = getParameterByName("s","--") || getParameterByName("s") || "ChooseScene.qml";
     jQuery("#qmlSrcLink a").attr("href",src);
-
-    qmlEngine.loadFile( src );
+    
+    try {
+      qmlEngine.loadFile( src );
+    } catch(e) {
+      jQuery("#qmlSpace").text( "QML parse error. Use browser console to see it.");
+      qmlEngine.loadFile( "Error.qml" );
+    }
     qmlEngine.start();
 
     console.log("qml engine started")
