@@ -1,1 +1,74 @@
-Hello world!
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>QmlWeb Demo</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+        <style>
+        body {
+            margin: 0;
+            -moz-user-select: -moz-none;
+            -khtml-user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #qmlSpace {
+          width: 80vw !important; 
+          height: 90vh !important; 
+          bottom: 0px !important;
+          z-index: 10000;
+          left: 10% !important;
+          top: 30px !important;
+          border: 1px solid grey;
+        }
+
+        #qmlSrcLink {
+          right: 10% !important;
+          top: 10px !important;
+          position: absolute;
+        }
+        </style>
+    
+        <script type="text/javascript" src="qmlweb/src/parser.js"></script>
+        <script type="text/javascript" src="qmlweb/src/process.js"></script>        
+        <script type="text/javascript" src="qmlweb/src/import.js"></script>
+        <script type="text/javascript" src="qmlweb/src/qtcore.js"></script>
+
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>        
+        
+        <script type="text/javascript" src="github_raw_proxy.js"></script>
+    </head>
+    <body>
+
+    <div id="qmlSpace">Place for Qml scene</div>
+    <div id="qmlSrcLink"><a target="_blank" href="">open source</a></div>
+
+<script>
+    function getParameterByName(name,separator) {
+      if (!separator) separator = "=";
+      name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+      var regex = new RegExp("[\\?&]" + name + separator + "([^&#]*)"),
+        results = regex.exec(location.search);
+      //return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+      return results === null ? null : decodeURIComponent(results[1].replace(/\+/g, " "));
+    }
+
+    var q = document.getElementById("qmlSpace");
+    var qmlEngine = new QMLEngine(q);
+
+    qmlEngine.addModulePath( "qmlweb.components","https://github.com/pavelvasev/qmlweb.components" );
+
+    //if (qmlEngine.addImportPath) 
+    //  qmlEngine.addImportPath(""); // for now we have to point to import dir directly 
+
+    var src = getParameterByName("s","--") || getParameterByName("s") || "ChooseScene.qml";
+    jQuery("#qmlSrcLink a").attr("href",src);
+
+    qmlEngine.loadFile( src );
+    qmlEngine.start();
+
+    console.log("qml engine started")
+</script>
+
+    </body>
+</html>
