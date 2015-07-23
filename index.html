@@ -27,6 +27,12 @@
           top: 10px !important;
           position: absolute;
         }
+
+        #qmlRunLink {
+          left: 10% !important;
+          top: 10px !important;
+          position: absolute;
+        }
         </style>
     
         <script type="text/javascript" src="qmlweb/src/parser.js"></script>
@@ -42,6 +48,11 @@
 
     <div id="qmlSpace">Place for Qml scene</div>
     <div id="qmlSrcLink"><a target="_blank" href="">open source</a></div>
+<!--    
+    <div id="qmlRunLink"><a target="_blank" href="http://pavelvasev.github.io/qmlweb.run/">qmlweb.run</a></div>    
+-->    
+    <div id="qmlRunLink"><a target="_blank" href="javascript:window.location.href = window.location.href.split('?')[0];">qmlweb.run</a></div>    
+
 
 <script>
     function getParameterByName(name,separator) {
@@ -52,7 +63,7 @@
       //return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
       return results === null ? null : decodeURIComponent(results[1].replace(/\+/g, " "));
     }
-
+    
     var q = document.getElementById("qmlSpace");
     var qmlEngine = new QMLEngine(q);
 

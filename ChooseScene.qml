@@ -1,7 +1,7 @@
 import qmlweb.components
 
 Item {
-    //text: "Viewlang позволяет создавать трехмерные сцены на языке QML."
+    //text: "http://pavelvasev.github.io/qmlweb.run/"
     id: scen
 
     Text {
@@ -11,7 +11,6 @@ Item {
         y: parent.height/4
     }
 
-
     Column {
         anchors.horizontalCenter: parent.horizontalCenter
         y: parent.height/3
@@ -19,7 +18,7 @@ Item {
         id: cols
 
         Row {
-          spacing: 7
+            spacing: 7
 
             TextField {
                 id: inp
@@ -44,7 +43,47 @@ Item {
 
         }
 
-    }
+        Row {
+            spacing: 5
 
+            Text {
+                y: 3
+                text: "Examples:"
+            }
+
+            Button {
+                width: 150
+                text: "QmlWeb own tests"
+                onClicked: inp.text = "QmlwebTestsViewer.qml";
+            }
+
+            Button {
+                width: 180
+                text: "Qmlweb.components tests"
+                onClicked: {
+                    inp.text = "https://github.com/pavelvasev/qmlweb.components/blob/master/src/test/Index.qml"
+                }
+            }
+
+            Button {
+                width: 90
+                text: "Gist red rect"
+                onClicked: {
+                    inp.text = "https://gist.github.com/pavelvasev/21659c30797720842cee"
+                }
+            }
+
+
+        } // row of tests
+
+        Text {
+            property var tag: "left"
+            font.pixelSize: 12
+            text:   "Qmlweb.Run may run links from github and <a target='_blank' href='https://gist.github.com/'>gist</a>.\n"+
+                    "Use this JS-bookmark to run file in Qmlweb.Run: "+
+                    "<a href='javascript:(function(){window.location.href=\"http://pavelvasev.github.io/qmlweb.run/?s=\"+window.location.href.toString(); } )()'>See in Qmlweb.Run</a>"
+        }
+
+    } // column
 }
 

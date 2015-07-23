@@ -1,3 +1,13 @@
+/*
+  Here we override `window.XMLHttpRequest.prototype.open` which allows us to
+  catch Qmlweb's requests to github repos and change them to raw.githubusercontent.com.
+
+  If someone want, he may also change them to some proxies. But for qml files there is no need,
+  because Qmlweb ignores mime type.
+
+  (c) 2015 Pavel Vasev / pavel.vasev@gmail.com
+*/
+
 //////////// proxy
 function formatSrc(src) {
   // console.log("formatSrc src=",src);
