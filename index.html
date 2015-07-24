@@ -72,7 +72,8 @@
     var q = document.getElementById("qmlSpace");
     var qmlEngine = new QMLEngine(q);
 
-    qmlEngine.addModulePath( "qmlweb.components","https://github.com/pavelvasev/qmlweb.components" );
+    //qmlEngine.addModulePath( "qmlweb.components","https://github.com/pavelvasev/qmlweb.components" );
+    qmlEngine.addModulePath( "qmlweb.components","../qmlweb.components" );
 
     //if (qmlEngine.addImportPath) 
     //  qmlEngine.addImportPath(""); // for now we have to point to import dir directly 
@@ -84,6 +85,7 @@
       qmlEngine.loadFile( src );
     } catch(e) {
       jQuery("#qmlSpace").text( "QML parse error. Use browser console to see it.");
+      console.error(e);
       qmlEngine.loadFile( "Error.qml" );
     }
     qmlEngine.start();
