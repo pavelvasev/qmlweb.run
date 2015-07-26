@@ -52,8 +52,8 @@ Item {
             }
 
             Button {
-                width: 150
-                text: "QmlWeb own tests"
+                width: 100
+                text: "QmlWeb tests"
                 onClicked: inp.text = "QmlwebTestsViewer.qml";
             }
 
@@ -72,6 +72,15 @@ Item {
                     inp.text = "https://gist.github.com/pavelvasev/21659c30797720842cee"
                 }
             }
+
+            Button {
+                width: 100
+                text: "movie maker"
+                onClicked: {
+                    inp.text = "https://github.com/pavelvasev/simple_movie_maker/blob/gh-pages/Maker.qml"
+                }
+            }            
+            
 
 
         } // row of tests
