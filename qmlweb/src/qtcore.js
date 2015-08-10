@@ -96,7 +96,7 @@ Font = {
     Normal: "normal",
     DemiBold: "600",
     Bold: "bold",
-    Black: "bolder",
+    Black: "bolder"
 },
 Easing = {
     Linear: 1,
@@ -173,15 +173,18 @@ constructors = {
 };
 
 // mix of engine.loadQML and Loader.qml
-Qt.createQmlObject = function( src, parent, file )
+// THINK now we force to provide executionContext. Maybe it is better to compute if from parent if not provided?
+Qt.createQmlObject = function( src, parent, file, executionContext )
 {
-        var tree = parseQML(src);
+        var tree = parseQML(src, file);
 
         // Create and initialize objects
-        var component = new QMLComponent({ object: tree, parent: parent });
+
+        var component = new QMLComponent({ object: tree, parent: parent, context: executionContext });
         
         engine.loadImports( tree.$imports );
         //component.$basePath = engine.$basePath;
+        
         if (!file) file = Qt.resolvedUrl("createQmlObject_function");
         component.$basePath = engine.extractBasePath( file );
         component.$imports = tree.$imports; // for later use
@@ -191,13 +194,14 @@ Qt.createQmlObject = function( src, parent, file )
         obj.parent = parent;
         parent.childrenChanged();
         
-        engine.$initializePropertyBindings();
+        // engine.$initializePropertyBindings();
 
         if (engine.operationState !== QMLOperationState.Init && engine.operationState !== QMLOperationState.Idle) {
           // We don't call those on first creation, as they will be called
           // by the regular creation-procedures at the right time.
           engine.$initializePropertyBindings();
-
+          engine.callCompletedSignals();
+          /*
           function callOnCompleted(child) {
             child.Component.completed();
             for (var i = 0; i < child.children.length; i++)
@@ -205,6 +209,7 @@ Qt.createQmlObject = function( src, parent, file )
           }
       
           callOnCompleted(obj);
+          */
         }
 
         return obj;
@@ -214,14 +219,26 @@ Qt.createQmlObject = function( src, parent, file )
 //FIXME: remove the parameter executionContext and get it autonomously.
 Qt.createComponent = function(name, executionContext)
 {
-    if (name in engine.components)
+    if (name in engine.components) {
+        // user specified context? => should create copy of component with new context
+        /*
+        if (executionContext) {
+            var newComponentInstance = Object.create( engine.components[name] );
+            newComponentInstance.$context = executionContext;
+            return newComponentInstance;        
+        }
+        */
+        // no context, may return cached object.
         return engine.components[name];
+    }
         
     var nameIsUrl = name.indexOf("//") >= 0 || name.indexOf(":/") >= 0; // e.g. // in protocol, or :/ in disk urls (D:/)
-
+    
     // Do not perform path lookups if name starts with @ sign.
     // This is used when we load components from qmldir files
     // because in that case we do not need any lookups.
+    // INFO we keep original name to later use it as cache key (engine.components)
+    var origName = name;
     if (name.length > 0 && name[0] == "@") {
       nameIsUrl = true;
       name = name.substr( 1,name.length-1 );
@@ -245,7 +262,7 @@ Qt.createComponent = function(name, executionContext)
     if (src === false)
        return undefined;
    
-    var tree = parseQML(src);
+    var tree = parseQML(src, file);
 
     if (tree.$children.length !== 1)
         console.error("A QML component must only contain one root element!");
@@ -258,7 +275,7 @@ Qt.createComponent = function(name, executionContext)
     
     engine.loadImports( tree.$imports,component.$basePath );
 
-    engine.components[name] = component;
+    engine.components[origName] = component;
     return component;
 }
 
@@ -335,12 +352,26 @@ QMLBinding.prototype.compile = function() {
          
       */
 
-      var s = "return (function(){"+this.src+"})()";
-      bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) " + s + "})"
+      //var s = "return (function(){"+this.src+"})()";
+      //bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) " + s + "})"
+
+      bindSrc = [
+        "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) ",
+        "return (function(){",
+        this.src,
+        "})()",
+        "})"
+      ].join("");
+      
     }
     else
     {
-      bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) return " + this.src + "})";
+      // bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) return " + this.src + "})";
+      bindSrc = [
+        "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) return ",
+        this.src,
+        "})"
+      ].join("");
     }
 
     /* 
@@ -379,17 +410,17 @@ function construct(meta) {
       var qdirInfo = engine.qmldirs[ meta.object.$class ]; // Are we have info on that component in some imported qmldir files?
       if (qdirInfo) {
           // We have that component in some qmldir, load it from qmldir's url // 4
-          component = Qt.createComponent( "@" + qdirInfo.url, meta.context);
+          component = Qt.createComponent( "@" + qdirInfo.url,meta.context );
       }
       else
-          component = Qt.createComponent(meta.object.$class + ".qml", meta.context); // 1,2
+          component = Qt.createComponent(meta.object.$class + ".qml",meta.context ); // 1,2
 
       if (component) {
         var item = component.createObject(meta.parent);
-
+        
         // Alter objects context to the outer context
         item.$context = meta.context;
-
+        
         if (engine.renderMode == QMLRenderMode.DOM)
             item.dom.className += " " + meta.object.$class + (meta.object.id ? " " + meta.object.id : "");
         var dProp; // Handle default properties
@@ -401,8 +432,21 @@ function construct(meta) {
 
     // id
     if (meta.object.id) {
-        /// console.log("meta.context[meta.object.id] = item;",meta.object.id,"prev value=",meta.context[meta.object.id]);
-        meta.context[meta.object.id] = item;
+        // we have to call `delete` before setting new value to context
+        // because it may contain some object property with defined setter
+        // in that case our assign will invoke that setter, and thus we will break some external object property!
+
+        /// delete meta.context[meta.object.id]; 
+        /// meta.context[meta.object.id] = item;
+
+        // PROBLEM
+        // we cannot just delete value from context, because it may contain setters/getters from prototype context's
+        // which are not deleted by `delete`
+
+        // SOLUTION
+        // we declare new getter and empty setter. seems it is ok.
+
+        setupGetterSetter( meta.context, meta.object.id, function() { return item }, function() {} );
     }
 
     // keep path in item for probale use it later in Qt.resolvedUrl 
@@ -514,8 +558,11 @@ function createSimpleProperty(type, obj, propName) {
         return obj.$properties[propName].set(newVal, QMLProperty.ReasonUser);
     };
     setupGetterSetter(obj, propName, getter, setter);
-    if (obj.$isComponentRoot)
+    if (obj.$isComponentRoot) {
         setupGetterSetter(obj.$context, propName, getter, setter);
+        //if (obj.$context.__proto__)
+        //  setupGetterSetter(obj.$context.__proto__, propName, getter, setter);
+    }
 }
 
 function QMLProperty(type, obj, name) {
@@ -800,7 +847,7 @@ function applyProperties(metaObject, item, objectScope, componentScope) {
             if (value instanceof QMLSignalDefinition) {
                 item[i] = Signal(value.parameters);
                 if (item.$isComponentRoot)
-                    componentScope[i] = item[i];
+                    componentScope[i] = item[i]; // BUG? might be here, if componentScope contains property with same name and a setter func. Must reset getter-setter, see construct function.
                 continue;
             } else if (value instanceof QMLMethod) {
                 value.compile();
@@ -961,6 +1008,10 @@ QMLEngine = function (element, options) {
 
     // Base path of qml engine (used for resource loading)
     this.$basePath = "";
+    
+    // Cache of content of loaded qmldir files. Used in engine.loadImports method.
+    // We init it with blank content of QtQuick module, because Qmlweb by default provides all the things from QtQuick.
+    this.qmldirsContents = { "QtQuick":{} };
 
 
 //----------Public Methods----------
@@ -1016,6 +1067,18 @@ QMLEngine = function (element, options) {
         return basePath;
     }
 
+    this.callCompletedSignals = function () {
+        while (this.completedSignals.length > 0) {
+           var h = this.completedSignals.splice(0,1); // remove first handler from list and put it to `h`
+           h[0](); // call first handler
+        }
+        /*
+        for (var i in this.completedSignals) {
+            this.completedSignals[i]();
+        }
+        */
+    }
+
     // Load file, parse and construct (.qml or .qml.js)
     this.loadFile = function(file) {
         this.$basePath = this.extractBasePath( file );
@@ -1029,7 +1092,7 @@ QMLEngine = function (element, options) {
     // parse and construct qml
     this.loadQML = function(src,file) { // file is not required; only for debug purposes
         engine = this;
-        var tree = parseQML(src);
+        var tree = parseQML(src, file);
         if (options.debugTree) {
             options.debugTree(tree);
         }
@@ -1049,9 +1112,7 @@ QMLEngine = function (element, options) {
         this.start();
         
         // Call completed signals
-        for (var i in this.completedSignals) {
-            this.completedSignals[i]();
-        }
+        this.callCompletedSignals();
     }
 
 /** from http://docs.closure-library.googlecode.com/git/local_closure_goog_uri_uri.js.source.html
@@ -1103,7 +1164,7 @@ QMLEngine = function (element, options) {
       TODO We have to keep results in component scope. 
            We have to add module "as"-names to component's names (which is possible after keeping imports in component scope).
     */
-
+    
     this.loadImports = function(importsArray, currentFileDir) { 
       if (!engine.qmldirsContents) engine.qmldirsContents = {}; // cache
       if (!engine.qmldirs) engine.qmldirs = {};                 // resulting components lookup table
@@ -1214,9 +1275,14 @@ QMLEngine = function (element, options) {
 
     this.$initializePropertyBindings = function() {
         // Initialize property bindings
+        // console.log("$$$$$$$$$$$$$$$ $initializePropertyBindings, this.bindedProperties.length = ",this.bindedProperties.length);
+        
+//        console.trace();
+        //for (var i = 0; i < this.bindedProperties.length; i++) {
+        // we use `while`, because $initializePropertyBindings may be called recursive (because of Loader and/or createQmlObject )
 
-        for (var i = 0; i < this.bindedProperties.length; i++) {
-            var property = this.bindedProperties[i];
+        while (this.bindedProperties.length > 0) {
+            var property = this.bindedProperties.splice(0,1) [0];
             if (!property.binding)
                 continue; // Probably, the binding was overwritten by an explicit value. Ignore.
             if (property.needsUpdate)
@@ -1233,15 +1299,17 @@ QMLEngine = function (element, options) {
                   updateVGeometry.apply( property.obj,[property.val, property.val, property.name] );                  
             }    
         }
-        this.bindedProperties = [];
+        //this.bindedProperties = [];
         
         this.$initializeAliasSignals();
+        //console.log("$$$$$$$$$$$$$$$ $initializePropertyBindings complete");
     }
 
     this.$initializeAliasSignals = function() {
         // Perform pending operations. Now we use it only to init alias's "changed" handlers, that's why we have such strange function name.
-        for (var i = 0; i < this.pendingOperations.length; i++) {
-            var op = this.pendingOperations[i];
+        //for (var i = 0; i < this.pendingOperations.length; i++) {
+        while (this.pendingOperations.length > 0) {
+            var op = this.pendingOperations.splice(0,1)[0];
             op[0]( op[1], op[2], op[3] );
         }
         this.pendingOperations = [];
@@ -1556,7 +1624,9 @@ QMLComponent.getAttachedObject = function() { // static
     }
     return this.$Component;
 }
-QMLComponent.prototype.createObject = function(parent, properties) {
+
+// componentContext is not necessary
+QMLComponent.prototype.createObject = function(parent, properties, componentContext ) {
     var oldState = engine.operationState;
     engine.operationState = QMLOperationState.Init;
     
@@ -1564,13 +1634,31 @@ QMLComponent.prototype.createObject = function(parent, properties) {
 
     var bp = engine.$basePath; // this is old engine.$basePath = this.$basePath ? this.$basePath : engine.$basePath;
     
-    // the logic of finding basepath is so interesting ...
+    // the logic of finding basepath is tricky
+    // 1 check own component property $basePath
+    // 2 if (1) failed, try lookup in context
     engine.$basePath = this.$basePath || (this.$context ? this.$context.$basePath : null) || engine.$basePath;
+    
+    // `componentContext` param is a feature for optimization
+    // sometimes we do not want to keep context in component
+    // because it may be 'blank' component from cache (see createComponent method)
+    // so we introduce `componentContext` param for override component context
+    
+    if (!componentContext) componentContext = this.$context;
 
+    var objectContext = componentContext ? Object.create(componentContext) : new QMLContext();
+
+    /* debugging. must define _uniqueId method. see https://gist.github.com/pavelvasev/1d37390dfdd2dcba24ac#file-uniq-js
+    if (componentContext)
+       objectContext._parentUniqueId = componentContext._uniqueId;
+     objectContext.__uniqueId = undefined;
+     console.log("created context ",objectContext._uniqueId,objectContext, "from componentContext",objectContext._parentUniqueId, componentContext);
+    */
+    
     var item = construct({
         object: this.$metaObject,
         parent: parent,
-        context: this.$context ? Object.create(this.$context) : new QMLContext(),
+        context: objectContext,
         isComponentRoot: true
     });
     // change base path back
