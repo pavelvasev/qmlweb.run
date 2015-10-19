@@ -356,7 +356,7 @@ QMLBinding.prototype.compile = function() {
       //bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) " + s + "})"
 
       bindSrc = [
-        "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) ",
+        "(function(__executionObject, __executionContext) { with(__executionContext.upflowContext) with(__executionContext) with(__executionObject) ",
         "return (function(){",
         this.src,
         "})()",
@@ -368,7 +368,7 @@ QMLBinding.prototype.compile = function() {
     {
       // bindSrc = "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) return " + this.src + "})";
       bindSrc = [
-        "(function(__executionObject, __executionContext) { with(__executionContext) with(__executionObject) return ",
+        "(function(__executionObject, __executionContext) { with(__executionContext.upflowContext) with(__executionContext) with(__executionObject) return ",
         this.src,
         "})"
       ].join("");
@@ -560,8 +560,42 @@ function createSimpleProperty(type, obj, propName) {
     setupGetterSetter(obj, propName, getter, setter);
     if (obj.$isComponentRoot) {
         setupGetterSetter(obj.$context, propName, getter, setter);
-        //if (obj.$context.__proto__)
-        //  setupGetterSetter(obj.$context.__proto__, propName, getter, setter);
+
+        /*
+        Let's introduce the concept of upflowContext field for "component scopes".
+        1. Add it to QMLContext as a field
+        2. use it within "with()" in bindings
+        3. add properties to this upflowContext in component root objects.
+        */
+        
+        setupGetterSetter(obj.$context.upflowContext, propName, getter, setter);
+
+       /* Below is an old attempt - add properties one by one to parent's component contexts. This was O(2) seems.
+
+        this way is very slow. without this, heart load is 4 sec; with this 10-20 sec. 
+        What we actually should do is introduce new type of context for "from-down-to-up" data flow.
+        This context should contain all properties of all componentRoot objects in subtree.
+        So:
+        1. introduce that type of context
+        2. fill it here, in if (obj.$isComponentRoot)
+        3. refactor binging source functions
+        4. refactor all calls to .eval of the bindings.
+
+        We can do it simpler! See above (lets introduce...)
+
+        if (propName === "children" || propName === "data" || propName === "resources" || propName === "parent") {
+          return;
+        }
+        console.log(propName);
+
+        // propagate property to upper levels object specs...
+        var protoContext = obj.$context.__proto__;
+        while (protoContext instanceof QMLContext) {
+          setupGetterSetter(protoContext, propName, getter, setter);
+          protoContext = protoContext.__proto__;
+        }
+       */
+        
     }
 }
 
@@ -1635,6 +1669,7 @@ function QMLContext() {
                 return name;
         }
     }
+    this.upflowContext = {};
 }
 
 QMLComponent.getAttachedObject = function() { // static
